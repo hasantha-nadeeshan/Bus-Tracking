@@ -156,3 +156,18 @@ void getDocumentID()
     }
   }
 }
+
+
+
+// Send an HTTP POST request depending on timerDelay
+  if ((millis() - lastTime) > timerDelay) {
+    //Check WiFi connection status
+    if(WiFi.status()== WL_CONNECTED){
+              
+      isStarted = isAppStarted();
+    }
+    else {
+      Serial.println("WiFi Disconnected");
+    }
+    lastTime = millis();
+  }

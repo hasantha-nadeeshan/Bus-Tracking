@@ -117,7 +117,8 @@ def updateEndField():
 @app.route('/updateLocation', methods=['POST'])
 def updateLocation(): 
     incoming_req = request.json
-    busDocId = incoming_req["busDocId"] 
+    busId = incoming_req["busId"] 
+    busDocId = getDocumentID(busId)
     lat_offset = float(incoming_req["latOffset"])*(10**OFFSETMULTIPLIER)
     lon_offset = float(incoming_req["lonOffset"])*(10**OFFSETMULTIPLIER)
     state, data = getCurLocation(busDocId)

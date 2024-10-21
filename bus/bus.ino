@@ -4,13 +4,13 @@
 #include <Arduino_JSON.h>
 #include <Arduino.h>
 #include <U8x8lib.h>
-#include <TinyGPSPlus.h>
+#include <TinyGPS++.h>
 #include <SoftwareSerial.h>
 
 /*GPS Configs*/
 TinyGPSPlus gps;
 SoftwareSerial SerialGPS(12, 14); 
-int GPS_ACCU = 8;
+int GPS_ACCU = 10;
 
 U8X8_SH1107_SEEED_128X128_HW_I2C u8x8(/* reset=*/ U8X8_PIN_NONE);
 
@@ -36,7 +36,7 @@ String docId = EMPTY_STRING;
 // the following variables are unsigned longs because the time, measured in
 // milliseconds, will quickly become a bigger number than can be stored in an int.
 unsigned long lastTime = 0;
-unsigned long timerDelay = 10000;
+unsigned long timerDelay = 5000;
 // Check if RESET button is pressed
 bool isStarted = false;
 bool gpsState = false;
@@ -45,8 +45,8 @@ String curLatitude = "0.00";
 String curLongitude = "0.00";
 String prevLongitude = "0.00";
 String prevLatitude = "0.00";
-String lonOffset = "0";
-String latOffset = "0";
+float lonOffset = 0.00;
+float latOffset = 0.00;
 String currentLonString,currentLatString;
 
 int year , month , date, hour , minute , second;
@@ -60,10 +60,10 @@ int pm;
 void setup() {
   Serial.begin(115200);
   SerialGPS.begin(9600);
-  pinMode(4, OUTPUT);
-  pinMode(5, OUTPUT);
-  digitalWrite(4,0);
-  digitalWrite(5,0);
+//  pinMode(4, OUTPUT);
+//  pinMode(5, OUTPUT);
+//  digitalWrite(4,0);1
+//  digitalWrite(5,0);
   u8x8.begin();
   u8x8.setPowerSave(0);
   u8x8.setFont(u8x8_font_chroma48medium8_r);
@@ -92,7 +92,7 @@ void loop() {
       
       while (isStarted) {  
         
-        if (digitalRead(RESET_BTN) == HIGH) {
+        if (digitalRead(RESET_BTN) == HIGH || isStarted == false) {
           isStarted = false;
           
           bool state = setTripEnd();
@@ -105,15 +105,13 @@ void loop() {
           }
           delay(5000);  // Avoid multiple presses
           clearDisplay();
+          resetValues();
           break;
         }
         
         if ((millis() - lastTime)> timerDelay) {
-          displayInfo("gps...",0,8);
-          gpsState = readGPSData();
-          if (gpsState == true){
-            displayInfo("Communicating...",0,6);
-          }      
+          displayInfo("Connecting GPS...",0,6);
+          readGPSData();     
           lastTime = millis();
         }
         // Yield control to avoid WDT reset
@@ -123,97 +121,49 @@ void loop() {
     clearDisplay();
     }
 }
-
-bool readGPSData()
+void resetValues(){
+  curLatitude = "0.00";
+  curLongitude = "0.00";
+  prevLongitude = "0.00";
+  prevLatitude = "0.00";
+  latOffset = 0.00;
+}
+void readGPSData()
 {
-  while (SerialGPS.available() > 0){
-    Serial.println("came in");
-    if (gps.encode(SerialGPS.read()))
-    {
-      Serial.println("came in 2");
-        Serial.println("get gps valid");
-        curLatitude = String(gps.location.lat() , GPS_ACCU);
-        curLongitude = String(gps.location.lng() , GPS_ACCU);
-        lonOffset = String((curLongitude.toFloat() - prevLongitude.toFloat())*pow(10,GPS_ACCU));
-        latOffset = String((curLatitude.toFloat() - prevLatitude.toFloat())*pow(10,GPS_ACCU));
-        Serial.println(curLatitude+","+curLongitude);
-        Serial.println(latOffset+","+lonOffset);
-        bool updateFlag = updateLocation();
-
-      if (gps.time.isValid()) {
-
-         time_str = "";
-
-         hour = gps.time.hour();
-
-         minute = gps.time.minute();
-
-         second = gps.time.second();
-
-         minute = (minute + 30);
-
-         if (minute > 59) {
-
-           minute = minute - 60;
-
-           hour = hour + 1;
-
-         }
-
-         hour = (hour + 5) ;
-
-         if (hour > 23)
-
-           hour = hour - 24;
-
-        if (hour >= 12)
-
-          pm = 1;
-
-        else
-
-          pm = 0;
-
-        hour = hour % 12;
-
-        if (hour < 10)
-
-          time_str = '0';
-
-        time_str += String(hour);
-
-        time_str += " : ";
-
-        if (minute < 10)
-
-          time_str += '0';
-
-        time_str += String(minute);
-
-        time_str += " : ";
-
-        if (second < 10)
-
-           time_str += '0';
-
-         time_str += String(second);
-
-         if (pm == 1)
-
-           time_str += " PM ";
-
-         else
-
-           time_str += " AM ";
-
-       }
-       Serial.println("Date: "+date_str+", time: "+time_str);
-      
+  while (isStarted){
+    while (SerialGPS.available() > 0 and isStarted == true){
+      if (gps.encode(SerialGPS.read()))
+      {
+          curLatitude = String(gps.location.lat() , GPS_ACCU);
+          curLongitude = String(gps.location.lng() , GPS_ACCU);
+          lonOffset = (curLongitude.toFloat() - prevLongitude.toFloat())*pow(10,(GPS_ACCU));
+          latOffset = (curLatitude.toFloat() - prevLatitude.toFloat())*pow(10,(GPS_ACCU));
+          updateLocation();
+          isResetToEnd();
+          displayInfo("Communicating...",0,6);      
+      }
+      isResetToEnd();
     }
-      delay(100); 
-
+    yield();
   }
-  return false;
+}
+
+void isResetToEnd(){
+  if (digitalRead(RESET_BTN) == HIGH) {
+          isStarted = false;
+          bool state = setTripEnd();
+          if (state == true) {
+            displayInfo("Trip Stopped",0,2);
+            displayInfo("   Thank You!   ",0,4);
+            displayInfo("Please Wait...",0,6);
+          }
+          else{
+            displayInfo("Error Occured",0,2);
+          }
+          delay(5000);  // Avoid multiple presses
+          clearDisplay();
+          resetValues();
+  }
 }
 
 void reconnectWifi()
@@ -233,28 +183,37 @@ void displayInfo(String msg, int row, int col){
 void clearDisplay(){
   u8x8.clearDisplay();
 }
-bool updateLocation() {
+void updateLocation() {
   if(WiFi.status() == WL_CONNECTED) { 
     WiFiClient client;
     HTTPClient http;
+    if ((millis() - lastTime)> timerDelay) {
+      // Your IP address with path or Domain name with URL path 
+      http.begin(client, SERVER_UPDATE_LOCATION);
       
-    // Your IP address with path or Domain name with URL path 
-    http.begin(client, SERVER_UPDATE_LOCATION);
-    
-    http.addHeader("Content-Type", "application/json");
-    String httpRequestData = "{\"busId\":\"" + BUS_ID + "\",\"lonOffset\":\"" + lonOffset + "\",\"latOffset\":\"" + latOffset + "\"}";  
-    int httpResponseCode = http.POST(httpRequestData);
-    
-    String payload = "{}"; 
-    bool state = false;
-    Serial.println(httpResponseCode);
-    if (httpResponseCode == 200) {
-      state = true;
+      http.addHeader("Content-Type", "application/json");
+      String httpRequestData = "{\"busId\":\"" + BUS_ID + "\",\"lonOffset\":\"" + String(lonOffset) + "\",\"latOffset\":\"" + String(latOffset) + "\"}";  
+      int httpResponseCode = http.POST(httpRequestData);
+      
+      String payload = "{}"; 
+      bool state = false;
+      Serial.println(curLatitude+","+curLongitude);
+      Serial.println(prevLatitude+","+prevLongitude);
+      Serial.println(String(latOffset)+","+String(lonOffset));
+
+      Serial.println(httpResponseCode);
+      Serial.println("*************************");
+      if (httpResponseCode == 200) {
+        state = true;
+        prevLongitude = curLongitude;
+        prevLatitude = curLatitude;
+      }
+      // Free resources
+      http.end();
+      lastTime = millis();
+      
     }
-    // Free resources
-    http.end();
-  
-    return state;
+    
   }
   else{
     reconnectWifi();

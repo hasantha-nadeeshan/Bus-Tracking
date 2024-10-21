@@ -8,7 +8,7 @@ from firebase_admin.firestore import GeoPoint
 import time
 
 TRIPS = 'trips'
-OFFSETMULTIPLIER = -1
+OFFSETMULTIPLIER = -10
 EMPTY_STRING  = ""
 
 cred = credentials.Certificate("./bus-tracking-system-6713f-firebase-adminsdk-nd844-335738fd3a.json")
@@ -73,6 +73,9 @@ def setStartField(busId):
         # Document Reference
         doc = col_ref.document(doc_ref.id)
         doc.update({u"isStarted": True})  
+        doc.update({u"isEnded": False})  
+        doc.update({u"curLoc" : GeoPoint(0.00, 0.00)})
+        doc.update({u"prevLoc" : GeoPoint(0.00, 0.00)})               
       
       return jsonify({"info" : "OK"
                       })
